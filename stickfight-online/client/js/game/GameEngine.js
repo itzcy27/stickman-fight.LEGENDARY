@@ -159,42 +159,62 @@ class GameEngine {
       // ── Attack input → damage dummy ───────────────────────────────────
       if (!pState.blocking && pState.attackCooldown <= 0 && dummy.iFrames <= 0) {
         let attackType = null;
-        if (input.punch) attackType = pState.onGround ? 'punch' : 'air';
+        if (input.punch)   attackType = pState.onGround ? 'punch' : 'air';
         else if (input.kick) attackType = 'kick';
+        else if (input.special) attackType = 'special';
+        else if (input.ultimate && pState.ultimateEnergy >= 100) attackType = 'ultimate';
 
         if (attackType) {
-          // Simple range check
-          const dist = Math.abs(pState.x - dummy.x);
-          const inRange = dist < 120;
+          const dist    = Math.abs(pState.x - dummy.x);
+          const range   = attackType === 'special' || attackType === 'ultimate' ? 200 : 120;
+          const inRange = dist < range;
 
           if (inRange) {
-            const dmgMap = { punch: char.punchDamage, kick: char.kickDamage, air: char.airDamage };
+            const dmgMap = {
+              punch:    char.punchDamage,
+              kick:     char.kickDamage,
+              air:      char.airDamage,
+              special:  char.specialDamage,
+              ultimate: char.ultimateDamage,
+            };
             const dmg = dmgMap[attackType] || char.punchDamage;
-            dummy.hp = Math.max(0, dummy.hp - dmg);
-            dummy.state = 'hit';
-            dummy.stunTime = 300;
+            dummy.hp       = Math.max(0, dummy.hp - dmg);
+            dummy.state    = 'hit';
+            dummy.stunTime = attackType === 'ultimate' ? 900 : attackType === 'special' ? 500 : 300;
             dummy.iFrames  = 500;
-            const kbDir = pState.x < dummy.x ? 1 : -1;
-            dummy.vx = kbDir * 280;
-            dummy.vy = -180;
+            const kbDir    = pState.x < dummy.x ? 1 : -1;
+            dummy.vx = kbDir * (attackType === 'ultimate' ? 700 : attackType === 'special' ? 550 : 280);
+            dummy.vy = attackType === 'ultimate' ? -500 : -180;
             dummy.onGround = false;
-            pState.energy = Math.min(100, (pState.energy || 0) + dmg * 0.8);
+
+            pState.energy         = Math.min(100, (pState.energy || 0) + dmg * 0.8);
             pState.ultimateEnergy = Math.min(100, (pState.ultimateEnergy || 0) + dmg * 0.6);
 
-            // Spawn effects
-            this.renderer.hitSparks.spawn(dummy.x, dummy.y - 40, attackType, false);
-            this.renderer.particles.spawnHitSpark(dummy.x, dummy.y - 40, char.color, 8);
-            Camera.shake(5);
+            if (attackType === 'ultimate') {
+              pState.ultimateEnergy = 0;
+              this.ultimateEffect.play(char.ultimateName, char.glowColor);
+              Camera.shake(16, 0.8);
+              Utils.flash('gold');
+              this.renderer.particles.spawnUltimate(dummy.x, dummy.y - 50, char.glowColor, 30);
+            } else if (attackType === 'special') {
+              Camera.shake(8);
+              Utils.flash('red');
+              this.renderer.particles.spawnUltimate(dummy.x, dummy.y - 40, char.accentColor, 12);
+            } else {
+              this.renderer.hitSparks.spawn(dummy.x, dummy.y - 40, attackType, false);
+              this.renderer.particles.spawnHitSpark(dummy.x, dummy.y - 40, char.color, 8);
+              Camera.shake(5);
+            }
           }
 
-          pState.state = 'attack';
-          pState.currentAttack = attackType;
-          pState.attackCooldown = 350;
+          pState.state = attackType === 'ultimate' ? 'ultimate' : attackType === 'special' ? 'special' : 'attack';
+          pState.currentAttack  = attackType;
+          pState.attackCooldown = attackType === 'ultimate' ? 800 : attackType === 'special' ? 500 : 350;
         }
       }
 
-      // Clear attack state
-      if (pState.attackCooldown <= 0 && pState.state === 'attack') {
+      // Clear attack state when cooldown expires
+      if (pState.attackCooldown <= 0 && (pState.state === 'attack' || pState.state === 'special' || pState.state === 'ultimate')) {
         pState.state = pState.onGround ? 'idle' : 'jump';
         pState.currentAttack = null;
       }
@@ -240,23 +260,3 @@ class GameEngine {
 
     this.gameState.events = [];
     this.renderer.render(dt, this.gameState, 0, this.showHitboxes);
-  }
-
-  resetTraining() {
-    if (!this.gameState) return;
-    const FLOOR_Y = 520;
-    this.gameState.players.forEach((p, i) => {
-      const ch = CharacterRegistry.get(p.characterId);
-      p.x = i === 0 ? 300 : 900;
-      p.y = FLOOR_Y;
-      p.vx = 0; p.vy = 0;
-      p.hp = ch.maxHp;
-      p.state = 'idle';
-      p.onGround = true;
-      p.stunTime = 0;
-      p.energy = 0;
-    });
-  }
-}
-
-window.GameEngine = GameEngine;
