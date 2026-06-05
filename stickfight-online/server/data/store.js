@@ -1,114 +1,209 @@
 /**
- * In-memory data store with optional JSON file persistence.
- * Suitable for Render free tier (ephemeral disk).
- * Swap out save/load for a real DB in production.
+ * Data store — MongoDB via Mongoose.
+ * Falls back to in-memory if MONGODB_URI is not set (local dev without DB).
+ *
+ * Public API is identical to the old JSON-file version so no other
+ * files need to change.
  */
-const fs = require('fs');
-const path = require('path');
+const mongoose = require('mongoose');
 
-const DATA_FILE = path.join(__dirname, 'users.json');
+// ─── Schema ───────────────────────────────────────────────────────────────────
 
-// In-memory maps
-let users = {};       // username -> UserRecord
-let sessions = {};    // socketId -> username
+const matchRecordSchema = new mongoose.Schema({
+  opponent:            String,
+  result:              String,   // 'win' | 'loss' | 'draw'
+  characterId:         String,
+  opponentCharacterId: String,
+  timestamp:           Number,
+  ranked:              Boolean,
+}, { _id: false });
 
-function loadFromDisk() {
+const userSchema = new mongoose.Schema({
+  username:  { type: String, required: true, unique: true },
+  createdAt: { type: Number, default: () => Date.now() },
+  stats: {
+    wins:         { type: Number, default: 0 },
+    losses:       { type: Number, default: 0 },
+    elo:          { type: Number, default: 1000 },
+    matchHistory: { type: [matchRecordSchema], default: [] },
+  },
+  settings: {
+    selectedCharacter: { type: String, default: 'ryoku' },
+  },
+});
+
+const User = mongoose.model('User', userSchema);
+
+// ─── Connection ───────────────────────────────────────────────────────────────
+
+let connected = false;
+let fallback   = {};   // in-memory fallback when no MONGODB_URI
+
+async function connect() {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    console.warn('[Store] MONGODB_URI not set — using in-memory store (data will not persist).');
+    return;
+  }
   try {
-    if (fs.existsSync(DATA_FILE)) {
-      const raw = fs.readFileSync(DATA_FILE, 'utf8');
-      users = JSON.parse(raw);
-    }
-  } catch (e) {
-    console.error('[Store] Failed to load data:', e.message);
-    users = {};
+    await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
+    connected = true;
+    console.log('[Store] MongoDB connected.');
+  } catch (err) {
+    console.error('[Store] MongoDB connection failed:', err.message);
+    console.warn('[Store] Falling back to in-memory store.');
   }
 }
 
-function saveToDisk() {
-  try {
-    const dir = path.dirname(DATA_FILE);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(DATA_FILE, JSON.stringify(users, null, 2));
-  } catch (e) {
-    console.error('[Store] Failed to save data:', e.message);
-  }
+connect();
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function toPlain(doc) {
+  if (!doc) return null;
+  const obj = doc.toObject ? doc.toObject() : doc;
+  delete obj.__v;
+  return obj;
 }
 
-// Load on startup
-loadFromDisk();
+// ─── In-memory fallback implementations ──────────────────────────────────────
 
-// ─── User operations ────────────────────────────────────────────────────────
-
-function createUser(username) {
-  if (users[username]) return null; // already exists
-  users[username] = {
+function _fbCreateUser(username) {
+  if (fallback[username]) return null;
+  fallback[username] = {
     username,
     createdAt: Date.now(),
-    stats: {
-      wins: 0,
-      losses: 0,
-      elo: 1000,
-      matchHistory: [],
-    },
-    settings: {
-      selectedCharacter: 'ryoku',
-    },
+    stats: { wins: 0, losses: 0, elo: 1000, matchHistory: [] },
+    settings: { selectedCharacter: 'ryoku' },
   };
-  saveToDisk();
-  return users[username];
+  return fallback[username];
 }
 
-function getUser(username) {
-  return users[username] || null;
+function _fbGetUser(username) { return fallback[username] || null; }
+
+function _fbUpdateUser(username, patch) {
+  if (!fallback[username]) return null;
+  if (patch.stats)     Object.assign(fallback[username].stats,    patch.stats);
+  if (patch.settings)  Object.assign(fallback[username].settings, patch.settings);
+  return fallback[username];
 }
 
-function updateUser(username, patch) {
-  if (!users[username]) return null;
-  // Deep merge stats
-  if (patch.stats) {
-    Object.assign(users[username].stats, patch.stats);
-  }
-  if (patch.settings) {
-    Object.assign(users[username].settings, patch.settings);
-  }
-  saveToDisk();
-  return users[username];
+function _fbAddHistory(username, record) {
+  if (!fallback[username]) return;
+  fallback[username].stats.matchHistory.unshift(record);
+  if (fallback[username].stats.matchHistory.length > 20)
+    fallback[username].stats.matchHistory.pop();
 }
 
-function addMatchHistory(username, record) {
-  if (!users[username]) return;
-  const history = users[username].stats.matchHistory;
-  history.unshift(record); // newest first
-  if (history.length > 20) history.pop(); // keep last 20
-  saveToDisk();
-}
-
-function getLeaderboard(limit = 20) {
-  return Object.values(users)
+function _fbLeaderboard(limit) {
+  return Object.values(fallback)
     .sort((a, b) => b.stats.elo - a.stats.elo)
     .slice(0, limit)
-    .map((u, i) => ({
-      rank: i + 1,
+    .map((u, i) => ({ rank: i + 1, username: u.username, elo: u.stats.elo, wins: u.stats.wins, losses: u.stats.losses }));
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+async function createUser(username) {
+  if (!connected) return _fbCreateUser(username);
+  try {
+    const existing = await User.findOne({ username });
+    if (existing) return null;
+    const user = new User({ username });
+    await user.save();
+    return toPlain(user);
+  } catch (err) {
+    console.error('[Store] createUser error:', err.message);
+    return null;
+  }
+}
+
+async function getUser(username) {
+  if (!connected) return _fbGetUser(username);
+  try {
+    const user = await User.findOne({ username });
+    return toPlain(user);
+  } catch (err) {
+    console.error('[Store] getUser error:', err.message);
+    return null;
+  }
+}
+
+async function updateUser(username, patch) {
+  if (!connected) return _fbUpdateUser(username, patch);
+  try {
+    const update = {};
+    if (patch.stats) {
+      for (const [k, v] of Object.entries(patch.stats)) {
+        update[`stats.${k}`] = v;
+      }
+    }
+    if (patch.settings) {
+      for (const [k, v] of Object.entries(patch.settings)) {
+        update[`settings.${k}`] = v;
+      }
+    }
+    const user = await User.findOneAndUpdate(
+      { username },
+      { $set: update },
+      { new: true }
+    );
+    return toPlain(user);
+  } catch (err) {
+    console.error('[Store] updateUser error:', err.message);
+    return null;
+  }
+}
+
+async function addMatchHistory(username, record) {
+  if (!connected) return _fbAddHistory(username, record);
+  try {
+    await User.findOneAndUpdate(
+      { username },
+      {
+        $push: {
+          'stats.matchHistory': {
+            $each:     [record],
+            $position: 0,
+            $slice:    20,
+          },
+        },
+      }
+    );
+  } catch (err) {
+    console.error('[Store] addMatchHistory error:', err.message);
+  }
+}
+
+async function getLeaderboard(limit = 20) {
+  if (!connected) return _fbLeaderboard(limit);
+  try {
+    const users = await User.find()
+      .sort({ 'stats.elo': -1 })
+      .limit(limit)
+      .lean();
+    return users.map((u, i) => ({
+      rank:     i + 1,
       username: u.username,
-      elo: u.stats.elo,
-      wins: u.stats.wins,
-      losses: u.stats.losses,
+      elo:      u.stats.elo,
+      wins:     u.stats.wins,
+      losses:   u.stats.losses,
     }));
+  } catch (err) {
+    console.error('[Store] getLeaderboard error:', err.message);
+    return [];
+  }
 }
 
-// ─── Session operations ──────────────────────────────────────────────────────
+// ─── Session store (in-memory only — sessions are per-process) ────────────────
 
-function setSession(socketId, username) {
-  sessions[socketId] = username;
-}
+const sessions = {};
 
-function getSession(socketId) {
-  return sessions[socketId] || null;
-}
+function setSession(socketId, username)  { sessions[socketId] = username; }
+function getSession(socketId)            { return sessions[socketId] || null; }
+function removeSession(socketId)         { delete sessions[socketId]; }
 
-function removeSession(socketId) {
-  delete sessions[socketId];
-}
+// ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
   createUser,
