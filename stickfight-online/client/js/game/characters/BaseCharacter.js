@@ -56,8 +56,11 @@ class BaseCharacter {
   draw(ctx, cx, cy, state, preview = false) {
     ctx.save();
     const facing = state?.facing ?? 1;
+    // Flip the canvas around the character's center x
+    ctx.translate(cx, 0);
     ctx.scale(facing, 1);
-    const x = cx * facing; // compensate for flip
+    ctx.translate(-cx, 0);
+    const x = cx; // x is now in local (pre-flip) space
 
     const t = Date.now() / 1000;
     const pose = preview ? 'idle' : (state?.state || 'idle');
@@ -157,7 +160,6 @@ class BaseCharacter {
     // Draw shadow
     ctx.save();
     ctx.globalAlpha = 0.3;
-    ctx.scale(facing, 1);
     ctx.beginPath();
     ctx.ellipse(x, cy, 22, 6, 0, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
