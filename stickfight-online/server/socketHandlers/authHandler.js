@@ -2,8 +2,7 @@ const store = require('../data/store');
 
 module.exports = function registerAuthHandlers(socket, io) {
 
-  // Register / Login combined — if username doesn't exist, create it
-  socket.on('auth:login', ({ username }) => {
+  socket.on('auth:login', async ({ username }) => {
     if (!username || typeof username !== 'string') {
       return socket.emit('auth:error', { message: 'Invalid username.' });
     }
@@ -15,30 +14,35 @@ module.exports = function registerAuthHandlers(socket, io) {
       return socket.emit('auth:error', { message: 'Username can only contain letters, numbers, _ and -.' });
     }
 
-    let user = store.getUser(clean);
+    let user = await store.getUser(clean);
     const isNew = !user;
-    if (!user) user = store.createUser(clean);
+    if (!user) user = await store.createUser(clean);
+    if (!user) {
+      // Race condition — someone else created it first, just fetch
+      user = await store.getUser(clean);
+    }
 
     store.setSession(socket.id, clean);
     socket.emit('auth:success', { user, isNew });
   });
 
-  socket.on('auth:get_profile', () => {
+  socket.on('auth:get_profile', async () => {
     const username = store.getSession(socket.id);
     if (!username) return socket.emit('auth:error', { message: 'Not logged in.' });
-    const user = store.getUser(username);
+    const user = await store.getUser(username);
     if (!user) return socket.emit('auth:error', { message: 'User not found.' });
     socket.emit('auth:profile', { user });
   });
 
-  socket.on('auth:update_character', ({ characterId }) => {
+  socket.on('auth:update_character', async ({ characterId }) => {
     const username = store.getSession(socket.id);
     if (!username) return;
-    store.updateUser(username, { settings: { selectedCharacter: characterId } });
+    await store.updateUser(username, { settings: { selectedCharacter: characterId } });
   });
 
-  socket.on('auth:leaderboard', () => {
+  socket.on('auth:leaderboard', async () => {
     const { getLeaderboard } = require('../ranked/Leaderboard');
-    socket.emit('auth:leaderboard_data', { leaderboard: getLeaderboard(20) });
+    const leaderboard = await getLeaderboard(20);
+    socket.emit('auth:leaderboard_data', { leaderboard });
   });
 };
