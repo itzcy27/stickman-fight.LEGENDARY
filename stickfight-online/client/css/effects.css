@@ -1,0 +1,211 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   VISUAL EFFECTS — particles, screen shake, ultimates, animations
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Screen shake ────────────────────────────────────────────────────────── */
+@keyframes shake-sm {
+  0%,100%{transform:translate(0,0)}
+  20%{transform:translate(-4px,2px)}
+  40%{transform:translate(4px,-2px)}
+  60%{transform:translate(-2px,4px)}
+  80%{transform:translate(2px,-4px)}
+}
+@keyframes shake-md {
+  0%,100%{transform:translate(0,0)}
+  15%{transform:translate(-8px,4px)}
+  30%{transform:translate(8px,-6px)}
+  45%{transform:translate(-6px,8px)}
+  60%{transform:translate(8px,-4px)}
+  75%{transform:translate(-4px,6px)}
+  90%{transform:translate(4px,-2px)}
+}
+@keyframes shake-lg {
+  0%,100%{transform:translate(0,0) rotate(0)}
+  10%{transform:translate(-12px,6px) rotate(-0.5deg)}
+  20%{transform:translate(12px,-8px) rotate(0.5deg)}
+  30%{transform:translate(-10px,12px) rotate(-0.3deg)}
+  40%{transform:translate(10px,-6px) rotate(0.3deg)}
+  50%{transform:translate(-8px,10px)}
+  60%{transform:translate(8px,-8px)}
+  70%{transform:translate(-6px,6px)}
+  80%{transform:translate(6px,-4px)}
+  90%{transform:translate(-2px,2px)}
+}
+
+.shake-sm { animation: shake-sm 0.25s ease; }
+.shake-md { animation: shake-md 0.35s ease; }
+.shake-lg { animation: shake-lg 0.5s ease; }
+
+/* ─── Flash overlay ───────────────────────────────────────────────────────── */
+.flash-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 500;
+  opacity: 0;
+}
+.flash-overlay.flash-white {
+  background: #fff;
+  animation: flash-out 0.3s ease forwards;
+}
+.flash-overlay.flash-red {
+  background: rgba(232,64,64,0.6);
+  animation: flash-out 0.4s ease forwards;
+}
+.flash-overlay.flash-gold {
+  background: rgba(255,215,0,0.5);
+  animation: flash-out 0.5s ease forwards;
+}
+@keyframes flash-out {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ─── Ultimate cinematic bar ──────────────────────────────────────────────── */
+.ult-cinematic-bars {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  pointer-events: none;
+}
+.ult-bar-top, .ult-bar-bottom {
+  position: absolute;
+  left: 0; right: 0;
+  background: #000;
+  height: 0;
+  transition: height 0.25s ease;
+}
+.ult-bar-top    { top: 0; }
+.ult-bar-bottom { bottom: 0; }
+.ult-cinematic-bars.active .ult-bar-top,
+.ult-cinematic-bars.active .ult-bar-bottom {
+  height: 14%;
+}
+
+/* ─── Ultimate name banner ────────────────────────────────────────────────── */
+.ult-name-banner {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-game);
+  font-size: 3.5rem;
+  letter-spacing: 8px;
+  text-transform: uppercase;
+  color: var(--gold);
+  text-shadow: 0 0 40px rgba(255,215,0,0.8), 0 0 80px rgba(255,215,0,0.4);
+  z-index: 450;
+  pointer-events: none;
+  opacity: 0;
+  animation: ult-banner-anim 2s ease forwards;
+}
+@keyframes ult-banner-anim {
+  0%   { opacity: 0; letter-spacing: 4px; }
+  20%  { opacity: 1; letter-spacing: 8px; }
+  70%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ─── Round transition ────────────────────────────────────────────────────── */
+.round-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 350;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+}
+.round-transition.animate {
+  animation: round-trans 1s ease forwards;
+}
+@keyframes round-trans {
+  0%   { opacity: 0; }
+  20%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ─── Particle canvas (injected by ParticleSystem) ──────────────────────── */
+#particle-canvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+}
+
+/* ─── HP bar pulse when low ───────────────────────────────────────────────── */
+.hp-bar.low {
+  background: linear-gradient(90deg, #ff1744, #ff6d00);
+  animation: hp-low-pulse 0.5s ease-in-out infinite;
+}
+@keyframes hp-low-pulse {
+  0%,100%{opacity:1} 50%{opacity:0.6}
+}
+
+/* ─── Character card hover glow ───────────────────────────────────────────── */
+.char-card::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: calc(var(--radius-lg) + 2px);
+  opacity: 0;
+  transition: opacity 0.2s;
+  background: linear-gradient(135deg, var(--primary), var(--accent2));
+  z-index: -1;
+}
+.char-card {
+  position: relative;
+}
+.char-card:hover::before { opacity: 0.5; }
+.char-card.active::before { opacity: 1; }
+
+/* ─── Combo counter ───────────────────────────────────────────────────────── */
+.combo-counter {
+  position: absolute;
+  font-family: var(--font-game);
+  font-size: 2.8rem;
+  color: var(--gold);
+  text-shadow: 0 0 20px rgba(255,215,0,0.8);
+  pointer-events: none;
+  z-index: 160;
+  animation: combo-pop 0.2s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes combo-pop {
+  from { transform: scale(0.5); }
+  to   { transform: scale(1); }
+}
+
+/* ─── VS screen splash ────────────────────────────────────────────────────── */
+.vs-splash {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  animation: vs-out 0.4s ease 2.5s forwards;
+}
+.vs-fighter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.vs-fighter-name {
+  font-family: var(--font-game);
+  font-size: 2rem;
+  letter-spacing: 3px;
+}
+.vs-text {
+  font-family: var(--font-game);
+  font-size: 5rem;
+  color: var(--primary);
+  text-shadow: var(--glow-red);
+  animation: vs-pulse 0.4s ease-in-out infinite alternate;
+}
+@keyframes vs-pulse  { from{transform:scale(0.9)} to{transform:scale(1.1)} }
+@keyframes vs-out    { to{opacity:0; pointer-events:none} }

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stickman Fight Online</title>
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/ui.css" />
+  <link rel="stylesheet" href="css/effects.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SCREEN CONTAINER — only one screen visible at a time
+  ════════════════════════════════════════════════════════════════════════ -->
+  <div id="app">
+
+    <!-- ── Loading ─────────────────────────────────────────────────────── -->
+    <div id="screen-loading" class="screen active">
+      <div class="loading-content">
+        <div class="game-title">STICKMAN<span>FIGHT</span></div>
+        <div class="loading-bar"><div class="loading-fill"></div></div>
+        <div class="loading-text">Connecting…</div>
+      </div>
+    </div>
+
+    <!-- ── Login ───────────────────────────────────────────────────────── -->
+    <div id="screen-login" class="screen">
+      <div class="screen-bg-art"></div>
+      <div class="panel">
+        <div class="game-title">STICKMAN<span>FIGHT</span></div>
+        <p class="subtitle">Enter a username to play</p>
+        <input id="login-input" type="text" placeholder="Username" maxlength="20" autocomplete="off" />
+        <div id="login-error" class="error-msg"></div>
+        <button id="login-btn" class="btn btn-primary">Play</button>
+      </div>
+    </div>
+
+    <!-- ── Main Menu ────────────────────────────────────────────────────── -->
+    <div id="screen-menu" class="screen">
+      <div class="screen-bg-art"></div>
+      <div class="menu-layout">
+        <div class="game-title">STICKMAN<span>FIGHT</span></div>
+        <div class="menu-user-bar">
+          <span id="menu-username"></span>
+          <span id="menu-elo" class="elo-badge"></span>
+        </div>
+        <div class="menu-buttons">
+          <button class="btn btn-primary" data-screen="casual">⚔️ Casual Match</button>
+          <button class="btn btn-ranked" data-screen="ranked">🏆 Ranked Match</button>
+          <button class="btn btn-secondary" data-screen="room">🔗 Private Room</button>
+          <button class="btn btn-secondary" data-screen="training">🥊 Training</button>
+          <button class="btn btn-secondary" data-screen="profile">👤 Profile</button>
+          <button class="btn btn-outline" id="menu-settings-btn">⚙️ Settings</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Profile ──────────────────────────────────────────────────────── -->
+    <div id="screen-profile" class="screen">
+      <div class="screen-header">
+        <button class="btn-back">← Back</button>
+        <h2>Profile</h2>
+      </div>
+      <div class="profile-content">
+        <div class="profile-card">
+          <div class="profile-avatar" id="profile-avatar"></div>
+          <div class="profile-info">
+            <div class="profile-name" id="profile-username"></div>
+            <div class="profile-elo">ELO: <span id="profile-elo">1000</span></div>
+          </div>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-box"><div class="stat-val" id="stat-wins">0</div><div class="stat-label">Wins</div></div>
+          <div class="stat-box"><div class="stat-val" id="stat-losses">0</div><div class="stat-label">Losses</div></div>
+          <div class="stat-box"><div class="stat-val" id="stat-winrate">0%</div><div class="stat-label">Win Rate</div></div>
+          <div class="stat-box"><div class="stat-val" id="stat-rank">#-</div><div class="stat-label">Rank</div></div>
+        </div>
+        <div class="section-title">Match History</div>
+        <div id="match-history-list" class="history-list"></div>
+        <div class="section-title">Leaderboard</div>
+        <div id="leaderboard-list" class="leaderboard-list"></div>
+      </div>
+    </div>
+
+    <!-- ── Character Select ─────────────────────────────────────────────── -->
+    <div id="screen-charselect" class="screen">
+      <div class="screen-header">
+        <button class="btn-back">← Back</button>
+        <h2 id="charselect-title">Select Fighter</h2>
+      </div>
+      <div class="charselect-layout">
+        <div class="char-grid" id="char-grid"></div>
+        <div class="char-preview" id="char-preview">
+          <canvas id="char-preview-canvas" width="200" height="280"></canvas>
+          <div class="char-name" id="preview-name"></div>
+          <div class="char-stats" id="preview-stats"></div>
+          <div class="char-ultimate" id="preview-ultimate"></div>
+          <button class="btn btn-primary" id="char-select-confirm">Select Fighter</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Room Screen ──────────────────────────────────────────────────── -->
+    <div id="screen-room" class="screen">
+      <div class="screen-header">
+        <button class="btn-back">← Back</button>
+        <h2>Private Room</h2>
+      </div>
+      <div class="room-layout">
+        <div class="room-tabs">
+          <button class="tab-btn active" data-tab="create">Create Room</button>
+          <button class="tab-btn" data-tab="join">Join Room</button>
+        </div>
+        <div class="tab-content active" id="tab-create">
+          <p>Share your room code with a friend</p>
+          <button class="btn btn-primary" id="create-room-btn">Create Room</button>
+          <div id="room-code-display" class="room-code-display hidden"></div>
+        </div>
+        <div class="tab-content" id="tab-join">
+          <p>Enter a 6-character room code</p>
+          <input id="join-code-input" type="text" placeholder="XXXXXX" maxlength="6" />
+          <button class="btn btn-primary" id="join-room-btn">Join Room</button>
+        </div>
+        <div id="room-error" class="error-msg"></div>
+        <div id="room-lobby" class="room-lobby hidden">
+          <div class="room-players" id="room-players"></div>
+          <button class="btn btn-primary" id="start-game-btn" disabled>Waiting for opponent…</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Matchmaking ──────────────────────────────────────────────────── -->
+    <div id="screen-matchmaking" class="screen">
+      <div class="screen-header">
+        <button class="btn-back cancel-mm">← Cancel</button>
+        <h2 id="mm-title">Finding Match…</h2>
+      </div>
+      <div class="matchmaking-content">
+        <div class="mm-spinner"></div>
+        <div class="mm-status" id="mm-status">Searching for opponent…</div>
+        <div class="mm-timer" id="mm-timer">0:00</div>
+      </div>
+    </div>
+
+    <!-- ── Game Screen ──────────────────────────────────────────────────── -->
+    <div id="screen-game" class="screen">
+      <canvas id="game-canvas"></canvas>
+      <!-- HUD overlay -->
+      <div id="hud" class="hud">
+        <div class="hud-player hud-p1">
+          <div class="hud-name" id="hud-p1-name">P1</div>
+          <div class="hp-bar-wrap"><div class="hp-bar" id="hp-bar-p1"></div></div>
+          <div class="energy-bar-wrap"><div class="energy-bar" id="energy-bar-p1"></div></div>
+          <div class="ult-bar-wrap" id="ult-wrap-p1">
+            <div class="ult-bar" id="ult-bar-p1"></div>
+            <span class="ult-label">ULTIMATE</span>
+          </div>
+          <div class="round-pips" id="pips-p1"></div>
+        </div>
+        <div class="hud-center">
+          <div class="round-timer" id="round-timer">99</div>
+          <div class="round-label" id="round-label">ROUND 1</div>
+        </div>
+        <div class="hud-player hud-p2">
+          <div class="hud-name" id="hud-p2-name">P2</div>
+          <div class="hp-bar-wrap"><div class="hp-bar" id="hp-bar-p2"></div></div>
+          <div class="energy-bar-wrap"><div class="energy-bar" id="energy-bar-p2"></div></div>
+          <div class="ult-bar-wrap" id="ult-wrap-p2">
+            <div class="ult-bar" id="ult-bar-p2"></div>
+            <span class="ult-label">ULTIMATE</span>
+          </div>
+          <div class="round-pips" id="pips-p2"></div>
+        </div>
+      </div>
+      <!-- Big announcer text -->
+      <div id="announcer" class="announcer hidden"></div>
+      <!-- Damage numbers container -->
+      <div id="dmg-numbers" class="dmg-numbers"></div>
+      <!-- Cooldown bar -->
+      <div id="special-cooldown" class="special-cd-bar hidden"></div>
+    </div>
+
+    <!-- ── Results Screen ───────────────────────────────────────────────── -->
+    <div id="screen-results" class="screen">
+      <div class="results-content">
+        <div class="results-title" id="results-title">Victory!</div>
+        <div class="results-fighters" id="results-fighters"></div>
+        <div class="results-stats" id="results-stats"></div>
+        <div class="elo-change" id="elo-change"></div>
+        <div class="results-buttons">
+          <button class="btn btn-primary" id="results-rematch">Rematch</button>
+          <button class="btn btn-secondary" id="results-menu">Main Menu</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Training Screen ─────────────────────────────────────────────── -->
+    <div id="screen-training" class="screen">
+      <canvas id="training-canvas"></canvas>
+      <div id="training-hud" class="hud">
+        <div class="hud-player hud-p1">
+          <div class="hud-name">You</div>
+          <div class="hp-bar-wrap"><div class="hp-bar" id="tr-hp-bar-p1" style="width:100%"></div></div>
+          <div class="energy-bar-wrap"><div class="energy-bar" id="tr-energy-p1"></div></div>
+          <div class="ult-bar-wrap"><div class="ult-bar" id="tr-ult-p1"></div><span class="ult-label">ULTIMATE</span></div>
+        </div>
+        <div class="hud-center">
+          <div class="round-label">TRAINING</div>
+        </div>
+        <div class="hud-player hud-p2">
+          <div class="hud-name">Dummy</div>
+          <div class="hp-bar-wrap"><div class="hp-bar" id="tr-hp-bar-p2" style="width:100%"></div></div>
+        </div>
+      </div>
+      <div id="training-announcer" class="announcer hidden"></div>
+      <div id="training-controls" class="training-controls">
+        <button class="btn btn-outline" id="tr-reset">↺ Reset</button>
+        <button class="btn btn-outline" id="tr-char">Change Fighter</button>
+        <button class="btn btn-outline" id="tr-back">← Exit</button>
+        <div class="controls-hint">WASD/Arrows=Move  J=Punch  K=Kick  S=Block  Q=Special  E=Ultimate  Double-tap=Dash</div>
+      </div>
+    </div>
+
+    <!-- ── Settings ─────────────────────────────────────────────────────── -->
+    <div id="screen-settings" class="screen modal-screen">
+      <div class="modal-panel">
+        <div class="modal-header">
+          <h2>Settings</h2>
+          <button class="btn-close" id="close-settings">✕</button>
+        </div>
+        <div class="settings-row">
+          <label>Music Volume</label>
+          <input type="range" id="setting-music" min="0" max="100" value="50" />
+        </div>
+        <div class="settings-row">
+          <label>SFX Volume</label>
+          <input type="range" id="setting-sfx" min="0" max="100" value="80" />
+        </div>
+        <div class="settings-row">
+          <label>Screen Shake</label>
+          <input type="checkbox" id="setting-shake" checked />
+        </div>
+        <div class="settings-row">
+          <label>Show Hitboxes</label>
+          <input type="checkbox" id="setting-hitboxes" />
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /#app -->
+
+  <!-- Socket.IO client -->
+  <script src="/socket.io/socket.io.js"></script>
+  <!-- Game modules -->
+  <script src="js/utils.js"></script>
+  <script src="js/socket.js"></script>
+  <script src="js/effects/ParticleSystem.js"></script>
+  <script src="js/effects/HitSparks.js"></script>
+  <script src="js/effects/UltimateEffect.js"></script>
+  <script src="js/effects/Background.js"></script>
+  <script src="js/game/characters/BaseCharacter.js"></script>
+  <script src="js/game/characters/Ryoku.js"></script>
+  <script src="js/game/characters/Seraph.js"></script>
+  <script src="js/game/characters/Vortex.js"></script>
+  <script src="js/game/characters/Nyx.js"></script>
+  <script src="js/game/characters/Titan.js"></script>
+  <script src="js/game/characters/index.js"></script>
+  <script src="js/game/Physics.js"></script>
+  <script src="js/game/InputHandler.js"></script>
+  <script src="js/game/Camera.js"></script>
+  <script src="js/game/Renderer.js"></script>
+  <script src="js/game/GameEngine.js"></script>
+  <script src="js/ui/HUD.js"></script>
+  <script src="js/ui/DamageNumbers.js"></script>
+  <script src="js/ui/Announcer.js"></script>
+  <script src="js/screens/MainMenu.js"></script>
+  <script src="js/screens/LoginScreen.js"></script>
+  <script src="js/screens/ProfileScreen.js"></script>
+  <script src="js/screens/CharacterSelect.js"></script>
+  <script src="js/screens/RoomScreen.js"></script>
+  <script src="js/screens/MatchmakingScreen.js"></script>
+  <script src="js/screens/GameScreen.js"></script>
+  <script src="js/screens/TrainingScreen.js"></script>
+  <script src="js/screens/ResultsScreen.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
