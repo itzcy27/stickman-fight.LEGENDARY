@@ -14,20 +14,25 @@ const io     = new Server(server, {
   pingInterval: 10000,
 });
 
-// ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '..', 'client')));
 
-// ─── API routes ───────────────────────────────────────────────────────────────
+const clientDir = path.join(__dirname, '..', 'client');
+app.use(express.static(clientDir, {
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.js'))   res.setHeader('Content-Type', 'application/javascript');
+    if (filePath.endsWith('.css'))  res.setHeader('Content-Type', 'text/css');
+    if (filePath.endsWith('.html')) res.setHeader('Content-Type', 'text/html');
+  }
+}));
+
 app.get('/api/health', (req, res) => res.json({ status: 'ok', env: NODE_ENV }));
 
-// Catch-all: serve client SPA
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'client', 'index.html'));
+app.get('*', (req, res, next) => {
+  if (req.path.includes('.')) return next();
+  res.sendFile(path.join(clientDir, 'index.html'));
 });
 
-// ─── Socket.IO ────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
   console.log(`[Socket] Connected: ${socket.id}`);
   registerAllHandlers(socket, io);
@@ -36,7 +41,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// ─── Start ────────────────────────────────────────────────────────────────────
 server.listen(PORT, () => {
   console.log(`✅ Stickman Fight server running on port ${PORT} [${NODE_ENV}]`);
 });
