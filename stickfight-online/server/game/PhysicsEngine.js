@@ -67,6 +67,12 @@ function applyInput(player, input, charDef) {
     if (player.state === 'run') player.state = 'idle';
   }
 
+  // Normalize attack inputs — accept either justPressed (client) or held (fallback)
+  input.punch   = input.punch   || input.punchHeld;
+  input.kick    = input.kick    || input.kickHeld;
+  input.special = input.special || input.specialHeld;
+  input.ultimate= input.ultimate|| input.ultimateHeld;
+
   // Jump / double-jump
   if (input.jump && input.jumpJustPressed) {
     if (player.onGround) {
