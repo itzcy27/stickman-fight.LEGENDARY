@@ -1,13 +1,9 @@
 const { getCharacter } = require('./characters/index');
 
-const BLOCK_REDUCTION = 0.15; // blocked attacks do 15% damage
-const HITSTUN_BASE    = 300;  // ms
-const IFRAME_DURATION = 500;  // ms after being hit
+const BLOCK_REDUCTION = 0.15;
+const HITSTUN_BASE    = 300;
+const IFRAME_DURATION = 500;
 
-/**
- * Process an attack input for attacker vs defender.
- * Returns a hit result or null.
- */
 function processAttack(attackerState, defenderState, attackType, attackerCharId, defenderCharId) {
   const atkChar = getCharacter(attackerCharId);
   const defChar = getCharacter(defenderCharId);
@@ -15,27 +11,20 @@ function processAttack(attackerState, defenderState, attackType, attackerCharId,
   if (!canAttack(attackerState)) return null;
   if (defenderState.iFrames > 0) return null;
 
-  // Build attacker hitbox
-  const hitbox = getAttackHitbox(attackerState, atkChar, attackType);
+  const hitbox  = getAttackHitbox(attackerState, atkChar, attackType);
   if (!hitbox) return null;
 
-  // Build defender hurtbox
   const hurtbox = getHurtbox(defenderState, defChar);
-
   if (!overlaps(hitbox, hurtbox)) return null;
 
-  // Calculate damage
   let baseDmg = getBaseDamage(attackType, atkChar);
   let damage  = Math.round(baseDmg * defChar.defenseRating);
 
   const blocked = defenderState.blocking && defenderState.onGround;
   if (blocked) damage = Math.max(1, Math.round(damage * BLOCK_REDUCTION));
 
-  // Knockback
   const kbDir   = attackerState.x < defenderState.x ? 1 : -1;
   const kbForce = getKnockback(attackType, atkChar) * (blocked ? 0.3 : 1);
-
-  // Hit stun
   const stunDuration = blocked ? 100 : HITSTUN_BASE + damage * 4;
 
   return {
@@ -49,9 +38,6 @@ function processAttack(attackerState, defenderState, attackType, attackerCharId,
   };
 }
 
-/**
- * Process a special attack.
- */
 function processSpecial(attackerState, defenderState, attackerCharId, defenderCharId) {
   const atkChar = getCharacter(attackerCharId);
   const defChar = getCharacter(defenderCharId);
@@ -59,9 +45,8 @@ function processSpecial(attackerState, defenderState, attackerCharId, defenderCh
   if (attackerState.specialCooldown > 0) return null;
   if (defenderState.iFrames > 0) return null;
 
-  // Special has bigger hitbox
-  const hitbox   = getSpecialHitbox(attackerState, atkChar);
-  const hurtbox  = getHurtbox(defenderState, defChar);
+  const hitbox  = getSpecialHitbox(attackerState, atkChar);
+  const hurtbox = getHurtbox(defenderState, defChar);
   if (!overlaps(hitbox, hurtbox)) return null;
 
   const blocked = defenderState.blocking && defenderState.onGround;
@@ -81,9 +66,6 @@ function processSpecial(attackerState, defenderState, attackerCharId, defenderCh
   };
 }
 
-/**
- * Process an ultimate — always hits if opponent is on stage (cinematic).
- */
 function processUltimate(attackerState, defenderState, attackerCharId, defenderCharId) {
   const atkChar = getCharacter(attackerCharId);
   const defChar = getCharacter(defenderCharId);
@@ -96,7 +78,7 @@ function processUltimate(attackerState, defenderState, attackerCharId, defenderC
 
   return {
     damage,
-    blocked: false, // ultimates can't be blocked
+    blocked: false,
     knockbackX: kbDir * 700,
     knockbackY: -500,
     stunDuration: 900,
@@ -107,8 +89,6 @@ function processUltimate(attackerState, defenderState, attackerCharId, defenderC
   };
 }
 
-// ─── Apply a hit result to defender & attacker state ─────────────────────────
-
 function applyHit(defenderState, attackerState, hit) {
   defenderState.hp        = Math.max(0, defenderState.hp - hit.damage);
   defenderState.vx        = hit.knockbackX;
@@ -118,9 +98,8 @@ function applyHit(defenderState, attackerState, hit) {
   defenderState.onGround  = false;
   defenderState.state     = 'hit';
 
-  // Attacker energy gain
   if (!hit.blocked) {
-    attackerState.energy = Math.min(100, attackerState.energy + hit.damage * 0.8);
+    attackerState.energy         = Math.min(100, attackerState.energy + hit.damage * 0.8);
     attackerState.ultimateEnergy = Math.min(100, attackerState.ultimateEnergy + hit.damage * 0.6);
   }
 
@@ -134,21 +113,20 @@ function applyHit(defenderState, attackerState, hit) {
   }
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function canAttack(state) {
+  // attackCooldown is the sole gate — attackActive check removed
+  // because it prevented hits from registering on the same tick
   return state.attackCooldown <= 0 &&
          state.stunTime <= 0 &&
-         state.attackActive <= 0 &&
          !state.blocking;
 }
 
 function getBaseDamage(type, char) {
   switch (type) {
-    case 'punch':  return char.punchDamage;
-    case 'kick':   return char.kickDamage;
-    case 'air':    return char.airDamage;
-    default:       return char.punchDamage;
+    case 'punch': return char.punchDamage;
+    case 'kick':  return char.kickDamage;
+    case 'air':   return char.airDamage;
+    default:      return char.punchDamage;
   }
 }
 
