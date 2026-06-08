@@ -5,26 +5,24 @@ const { processAttack, processSpecial, processUltimate, applyHit } = require('./
 const { getCharacter } = require('./characters/index');
 const AntiCheat = require('./AntiCheat');
 
-const ATTACK_COOLDOWN = 350; // ms between attacks
-const ATTACK_ACTIVE   = 200; // ms hitbox is live
-const COMBO_WINDOW    = 600; // ms to continue combo
-const COUNTDOWN_TICKS = 180; // 3 seconds at 60fps
+const ATTACK_COOLDOWN = 350;
+const ATTACK_ACTIVE   = 200;
+const COMBO_WINDOW    = 600;
+const COUNTDOWN_TICKS = 180;
 
 class GameRoom {
   constructor(roomCode, io) {
     this.roomCode  = roomCode;
     this.io        = io;
-    this.players   = [];    // [{ socketId, username, characterId, slot }]
+    this.players   = [];
     this.spectators= [];
     this.gameState = null;
     this.ticker    = null;
-    this.phase     = 'lobby'; // lobby|countdown|fighting|round_end|match_end
+    this.phase     = 'lobby';
     this.antiCheat = new AntiCheat();
-    this.inputQueues = {};   // socketId -> latest input
+    this.inputQueues = {};
     this.countdownTicks = 0;
   }
-
-  // ─── Lobby ────────────────────────────────────────────────────────────────
 
   addPlayer(socket, username, characterId) {
     if (this.players.length >= 2) return false;
@@ -67,8 +65,6 @@ class GameRoom {
     };
   }
 
-  // ─── Game start ──────────────────────────────────────────────────────────
-
   startGame() {
     if (this.players.length < 2) return false;
     this.gameState = createGameState(this.players);
@@ -96,12 +92,10 @@ class GameRoom {
     this.broadcast('game:stopped', { reason });
   }
 
-  // ─── Main tick ───────────────────────────────────────────────────────────
-
   tick() {
     const gs  = this.gameState;
     const now = Date.now();
-    const dt  = Math.min((now - gs.lastUpdate) / 1000, 0.05); // cap at 50ms
+    const dt  = Math.min((now - gs.lastUpdate) / 1000, 0.05);
     gs.lastUpdate = now;
     gs.frameCount++;
     gs.events = [];
@@ -121,11 +115,10 @@ class GameRoom {
 
     if (this.phase !== 'fighting') return;
 
-    // ── Process inputs ───────────────────────────────────────────────────
     for (const player of this.players) {
-      const input    = this.inputQueues[player.socketId] || {};
-      const pState   = gs.players[player.slot];
-      const charDef  = getCharacter(player.characterId);
+      const input   = this.inputQueues[player.socketId] || {};
+      const pState  = gs.players[player.slot];
+      const charDef = getCharacter(player.characterId);
       if (!pState || pState.hp <= 0) continue;
 
       if (!this.antiCheat.validateInput(player.socketId, input, pState)) continue;
@@ -136,13 +129,11 @@ class GameRoom {
       this._processAttackInput(pState, input, player, gs);
     }
 
-    // ── Physics ──────────────────────────────────────────────────────────
     for (const pState of gs.players) {
       tickCooldowns(pState, TICK_MS);
       if (pState.hp > 0) integrate(pState, dt);
     }
 
-    // ── Round timer ──────────────────────────────────────────────────────
     gs.roundTimer -= dt;
     if (gs.roundTimer <= 0) {
       gs.roundTimer = 0;
@@ -150,7 +141,6 @@ class GameRoom {
       return;
     }
 
-    // ── Death check ──────────────────────────────────────────────────────
     for (const pState of gs.players) {
       if (pState.hp <= 0 && pState.state !== 'dead') {
         pState.state = 'dead';
@@ -159,20 +149,19 @@ class GameRoom {
       }
     }
 
-    // ── Broadcast state ──────────────────────────────────────────────────
     this.broadcast('game:state', this._buildSnapshot(gs));
   }
 
   _processAttackInput(pState, input, player, gs) {
-    const otherSlot  = 1 - player.slot;
-    const defState   = gs.players[otherSlot];
-    const defCharId  = this.players[otherSlot]?.characterId;
-    const atkCharId  = player.characterId;
+    const otherSlot = 1 - player.slot;
+    const defState  = gs.players[otherSlot];
+    const defCharId = this.players[otherSlot]?.characterId;
+    const atkCharId = player.characterId;
 
     if (!defState || defState.hp <= 0) return;
 
     // Ultimate
-    if (input.ultimate && pState.ultimateEnergy >= 100 && pState.ultimateCooldown <= 0 && !pState.ultimateActive) {
+    if ((input.ultimate || input.ultimateHeld) && pState.ultimateEnergy >= 100 && pState.ultimateCooldown <= 0 && !pState.ultimateActive) {
       const hit = processUltimate(pState, defState, atkCharId, defCharId);
       if (hit) {
         applyHit(defState, pState, hit);
@@ -198,7 +187,7 @@ class GameRoom {
     }
 
     // Special
-    if (input.special && pState.specialCooldown <= 0 && pState.attackCooldown <= 0) {
+    if ((input.special || input.specialHeld) && pState.specialCooldown <= 0 && pState.attackCooldown <= 0) {
       const hit = processSpecial(pState, defState, atkCharId, defCharId);
       if (hit) {
         applyHit(defState, pState, hit);
@@ -212,13 +201,17 @@ class GameRoom {
       return;
     }
 
-    // Normal attacks
-    const attackType = input.punch ? 'punch' : input.kick ? 'kick' : (input.punch && !pState.onGround) ? 'air' : null;
+    // Normal attacks — accept justPressed or held fallback so fast inputs aren't missed
+    const punchInput = input.punch || input.punchHeld;
+    const kickInput  = input.kick  || input.kickHeld;
+    const attackType = !pState.onGround && punchInput ? 'air'
+                     : punchInput ? 'punch'
+                     : kickInput  ? 'kick'
+                     : null;
     if (!attackType) return;
     const resolvedType = !pState.onGround ? 'air' : attackType;
 
     if (pState.attackCooldown <= 0) {
-      // Combo system
       const now = Date.now();
       if (now - pState.lastComboTime < COMBO_WINDOW && resolvedType === 'punch') {
         pState.comboCount = (pState.comboCount % 3) + 1;
@@ -245,9 +238,9 @@ class GameRoom {
   _handleTimeOut(gs) {
     const [p0, p1] = gs.players;
     let winnerSlot;
-    if (p0.hp > p1.hp) winnerSlot = 0;
+    if (p0.hp > p1.hp)      winnerSlot = 0;
     else if (p1.hp > p0.hp) winnerSlot = 1;
-    else winnerSlot = -1; // draw
+    else                     winnerSlot = -1;
     this._endRound(gs, winnerSlot);
   }
 
@@ -262,7 +255,6 @@ class GameRoom {
       round: gs.round,
     });
 
-    // Check match winner
     const maxScore = Math.max(...gs.roundScores);
     if (maxScore >= Math.ceil(MAX_ROUNDS / 2) || gs.round >= MAX_ROUNDS) {
       setTimeout(() => this._endMatch(gs), 3000);
@@ -283,7 +275,7 @@ class GameRoom {
 
     const [p0, p1] = gs.players;
     let winnerSlot = -1;
-    if (gs.roundScores[0] > gs.roundScores[1]) winnerSlot = 0;
+    if (gs.roundScores[0] > gs.roundScores[1])      winnerSlot = 0;
     else if (gs.roundScores[1] > gs.roundScores[0]) winnerSlot = 1;
 
     const result = {
@@ -300,8 +292,6 @@ class GameRoom {
 
     this.broadcast('game:match_end', result);
     this.phase = 'match_end';
-
-    // Emit for stats update
     this.onMatchEnd?.(result, this.players);
   }
 
@@ -334,8 +324,6 @@ class GameRoom {
       events: gs.events,
     };
   }
-
-  // ─── Helpers ──────────────────────────────────────────────────────────────
 
   setInput(socketId, input) {
     if (this.inputQueues[socketId] !== undefined) {
