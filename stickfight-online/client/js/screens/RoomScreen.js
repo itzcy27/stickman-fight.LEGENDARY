@@ -1,10 +1,16 @@
 const RoomScreen = (() => {
   let _roomCode  = null;
   let _isHost    = false;
+  let _inited    = false;
 
   function init() {
+    // Reset state for this visit
     _roomCode = null;
     _isHost   = false;
+
+    // Only bind listeners once
+    if (_inited) return;
+    _inited = true;
 
     // Tabs
     Utils.qsa('.tab-btn', Utils.qs('#screen-room')).forEach(btn => {
