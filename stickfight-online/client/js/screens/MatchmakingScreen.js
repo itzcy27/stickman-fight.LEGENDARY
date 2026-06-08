@@ -13,7 +13,6 @@ const MatchmakingScreen = (() => {
     if (titleEl) titleEl.textContent = mode === 'ranked' ? '🏆 Finding Ranked Match…' : '⚔️ Finding Casual Match…';
     if (statusEl) statusEl.textContent = 'Searching for opponent…';
 
-    // Start timer
     clearInterval(_timerInt);
     _timerInt = setInterval(() => {
       const elapsed = Math.floor((Date.now() - _startTime) / 1000);
@@ -40,11 +39,10 @@ const MatchmakingScreen = (() => {
   });
 
   SocketClient.on('game:start', (data) => {
-    // Only handle if we're on the matchmaking screen
     if (!document.getElementById('screen-matchmaking')?.classList.contains('active')) return;
     clearInterval(_timerInt);
     if (window._pendingRoomCode) {
-      GameScreen.enter(window._pendingRoomCode, data);
+      window.GameScreen.enter(window._pendingRoomCode, data);
       window._pendingRoomCode = null;
     }
   });
