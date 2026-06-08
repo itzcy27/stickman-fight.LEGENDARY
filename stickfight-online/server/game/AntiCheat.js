@@ -1,10 +1,5 @@
-/**
- * Anti-cheat: validates inputs from clients before applying them.
- * Catches speed hacks, impossible positions, and spam attacks.
- */
-
-const MAX_INPUT_RATE     = 70;  // max inputs per second per player
-const MAX_POSITION_DELTA = 800; // max px movement per tick (at 60fps)
+const MAX_INPUT_RATE     = 120; // max inputs per second per player
+const MAX_POSITION_DELTA = 800;
 
 class AntiCheat {
   constructor() {
@@ -12,13 +7,11 @@ class AntiCheat {
   }
 
   validateInput(playerId, input, playerState) {
-    // Rate limit
     if (!this._checkRate(playerId)) {
       console.warn(`[AntiCheat] Rate limit exceeded for ${playerId}`);
       return false;
     }
 
-    // Sanitize input keys — only known keys allowed
     const allowed = ['left','right','jump','block','punch','kick','special','ultimate',
                      'punchHeld','kickHeld','specialHeld','ultimateHeld',
                      'jumpJustPressed','dashJustPressed','dashDir','comboIndex'];
