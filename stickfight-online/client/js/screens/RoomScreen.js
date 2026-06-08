@@ -57,17 +57,17 @@ const RoomScreen = (() => {
   }
 
   function _updateLobby(info) {
-    const lobby   = Utils.qs('#room-lobby');
-    const codeEl  = Utils.qs('#room-code-display');
+    const lobby     = Utils.qs('#room-lobby');
+    const codeEl    = Utils.qs('#room-code-display');
     const playersEl = Utils.qs('#room-players');
     const startBtn  = Utils.qs('#start-game-btn');
 
-    if (lobby)   lobby.classList.remove('hidden');
-    if (codeEl)  { codeEl.textContent = info.roomCode; codeEl.classList.remove('hidden'); }
+    if (lobby)  lobby.classList.remove('hidden');
+    if (codeEl) { codeEl.textContent = info.roomCode; codeEl.classList.remove('hidden'); }
 
     if (playersEl) {
       playersEl.innerHTML = [0, 1].map(slot => {
-        const p = info.players.find(pl => pl.slot === slot);
+        const p    = info.players.find(pl => pl.slot === slot);
         const char = p ? CharacterRegistry.get(p.characterId) : null;
         return `
           <div class="room-player-slot ${p ? 'filled' : 'waiting'}">
@@ -91,7 +91,6 @@ const RoomScreen = (() => {
 
   SocketClient.on('room:created', ({ roomCode }) => {
     _roomCode = roomCode;
-    Utils.qs('#room-code-display')?.classList.remove('hidden');
     _setError('');
   });
 
@@ -101,6 +100,8 @@ const RoomScreen = (() => {
   });
 
   SocketClient.on('room:update', (info) => {
+    // Accept update even if room:created/joined hasn't fired yet (race condition)
+    if (!_roomCode) _roomCode = info.roomCode;
     if (info.roomCode === _roomCode) _updateLobby(info);
   });
 
