@@ -8,16 +8,25 @@ const GameScreen = (() => {
 
   // Particle canvas injection
   let _pCanvas   = null;
+  // Named listener references so they can be removed on leave
+  let _listeners = {};
 
   function enter(roomCode, startData) {
     _roomCode = roomCode;
     Utils.setScreen('game');
 
-    // Inject particle canvas into game screen
+    // Remove any leftover listeners from a previous match
+    _removeListeners();
+
+    // Inject particle canvas into game screen (create once, always ensure it's in DOM)
+    const gameScreen = Utils.qs('#screen-game');
     if (!_pCanvas) {
       _pCanvas = document.createElement('canvas');
       _pCanvas.id = 'particle-canvas';
-      Utils.qs('#screen-game').appendChild(_pCanvas);
+      _pCanvas.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:50;';
+    }
+    if (!gameScreen.contains(_pCanvas)) {
+      gameScreen.appendChild(_pCanvas);
     }
 
     // Determine my slot
@@ -73,7 +82,7 @@ const GameScreen = (() => {
   }
 
   function _registerListeners() {
-    SocketClient.on('game:state', (snapshot) => {
+    _listeners['game:state'] = (snapshot) => {
       if (!_engine) return;
       _engine.applyServerState(snapshot);
 
@@ -85,19 +94,18 @@ const GameScreen = (() => {
           }
         }
       }
-    });
+    };
 
-    SocketClient.on('game:countdown', ({ value }) => {
+    _listeners['game:countdown'] = ({ value }) => {
       if (_announcer) _announcer.show(value.toString(), 900, '#fff');
-    });
+    };
 
-    SocketClient.on('game:fight_start', ({ round }) => {
+    _listeners['game:fight_start'] = ({ round }) => {
       if (_announcer) _announcer.show('FIGHT!', 1200, '#e84040');
-    });
+    };
 
-    SocketClient.on('game:round_end', ({ winnerSlot, roundScores, round }) => {
-      const myName = window.App?.user?.username;
-      const isWin  = winnerSlot === _mySlot;
+    _listeners['game:round_end'] = ({ winnerSlot, roundScores, round }) => {
+      const isWin = winnerSlot === _mySlot;
       if (_announcer) _announcer.show(
         winnerSlot < 0 ? 'DRAW' : (isWin ? 'ROUND WIN' : 'K.O.!'),
         2500,
@@ -105,37 +113,49 @@ const GameScreen = (() => {
       );
       Camera.shake(winnerSlot < 0 ? 4 : 12, 0.8);
       Utils.flash(isWin ? 'gold' : 'red');
-    });
+    };
 
-    SocketClient.on('game:ultimate', (data) => {
+    _listeners['game:ultimate'] = (data) => {
       if (_engine) _engine.onUltimate(data);
       if (_dmgNums) _dmgNums.spawn(data.damage, 600, 200, 'ultimate', false);
-    });
+    };
 
-    SocketClient.on('game:match_end', (result) => {
+    _listeners['game:match_end'] = (result) => {
       setTimeout(() => {
         if (_engine) _engine.stop();
         ResultsScreen.show(result, _mySlot);
       }, 1500);
-    });
+    };
 
-    SocketClient.on('room:player_left', () => {
+    _listeners['room:player_left'] = () => {
       if (_announcer) _announcer.show('OPPONENT LEFT', 3000, '#e84040');
-    });
+    };
 
-    SocketClient.on('game:stopped', ({ reason }) => {
+    _listeners['game:stopped'] = ({ reason }) => {
       if (_engine) _engine.stop();
       if (reason === 'disconnect') {
         setTimeout(() => Utils.setScreen('menu'), 2000);
       }
-    });
+    };
 
-    SocketClient.on('game:elo_update', (data) => {
+    _listeners['game:elo_update'] = (data) => {
       window._pendingEloUpdate = data;
-    });
+    };
+
+    for (const [event, fn] of Object.entries(_listeners)) {
+      SocketClient.on(event, fn);
+    }
+  }
+
+  function _removeListeners() {
+    for (const [event, fn] of Object.entries(_listeners)) {
+      SocketClient.off(event, fn);
+    }
+    _listeners = {};
   }
 
   function leave() {
+    _removeListeners();
     if (_engine) { _engine.stop(); _engine = null; }
     if (_roomCode) { SocketClient.emit('room:leave', { roomCode: _roomCode }); _roomCode = null; }
   }
