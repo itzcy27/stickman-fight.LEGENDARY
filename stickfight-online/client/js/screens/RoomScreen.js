@@ -30,8 +30,8 @@ const RoomScreen = (() => {
 
   function _createRoom() {
     const charId = window.App?.user?.settings?.selectedCharacter || 'ryoku';
+    _isHost = true; // set BEFORE emitting so it's ready when room:update arrives
     SocketClient.emit('room:create', { characterId: charId });
-    _isHost = true;
   }
 
   function _joinRoom() {
@@ -41,8 +41,8 @@ const RoomScreen = (() => {
       _setError('Enter a 6-character room code.');
       return;
     }
-    SocketClient.emit('room:join', { roomCode: code, characterId: charId });
     _isHost = false;
+    SocketClient.emit('room:join', { roomCode: code, characterId: charId });
   }
 
   function _startGame() {
@@ -53,6 +53,7 @@ const RoomScreen = (() => {
   function _leave() {
     if (_roomCode) SocketClient.emit('room:leave', { roomCode: _roomCode });
     _roomCode = null;
+    _isHost   = false;
     Utils.setScreen('menu');
   }
 
@@ -84,10 +85,15 @@ const RoomScreen = (() => {
       }).join('');
     }
 
+    // Determine host from the player list — slot 0 is always the host
+    const myUsername = window.App?.user?.username;
+    const isHost = info.players.find(p => p.slot === 0)?.username === myUsername;
+    if (isHost) _isHost = true;
+
     if (startBtn) {
       const ready = info.players.length === 2;
-      startBtn.disabled = !ready || !_isHost;
-      startBtn.textContent = _isHost
+      startBtn.disabled = !ready || !isHost;
+      startBtn.textContent = isHost
         ? (ready ? 'Start Game' : 'Waiting for opponent…')
         : (ready ? 'Waiting for host…' : 'Waiting for opponent…');
     }
