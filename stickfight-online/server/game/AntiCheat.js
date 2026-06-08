@@ -3,18 +3,14 @@
  * Catches speed hacks, impossible positions, and spam attacks.
  */
 
-const MAX_INPUT_RATE  = 70;   // max inputs per second per player
+const MAX_INPUT_RATE     = 70;  // max inputs per second per player
 const MAX_POSITION_DELTA = 800; // max px movement per tick (at 60fps)
 
 class AntiCheat {
   constructor() {
-    // playerId -> { inputCount, windowStart }
     this.rateLimits = {};
   }
 
-  /**
-   * Returns true if the input is valid.
-   */
   validateInput(playerId, input, playerState) {
     // Rate limit
     if (!this._checkRate(playerId)) {
@@ -22,9 +18,10 @@ class AntiCheat {
       return false;
     }
 
-    // Sanitize input keys — only booleans/numbers allowed
+    // Sanitize input keys — only known keys allowed
     const allowed = ['left','right','jump','block','punch','kick','special','ultimate',
-                     'jumpJustPressed','dashJustPressed','comboIndex'];
+                     'punchHeld','kickHeld','specialHeld','ultimateHeld',
+                     'jumpJustPressed','dashJustPressed','dashDir','comboIndex'];
     for (const key of Object.keys(input)) {
       if (!allowed.includes(key)) return false;
     }
@@ -32,10 +29,6 @@ class AntiCheat {
     return true;
   }
 
-  /**
-   * Validates a position reconciliation from the client.
-   * Returns true if the client position is within acceptable drift.
-   */
   validatePosition(clientPos, serverPos) {
     const dx = Math.abs(clientPos.x - serverPos.x);
     const dy = Math.abs(clientPos.y - serverPos.y);
