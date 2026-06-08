@@ -1,16 +1,20 @@
 const TrainingScreen = (() => {
-  let _engine  = null;
-  let _charId  = 'ryoku';
-  let _pCanvas = null;
+  let _engine          = null;
+  let _charId          = 'ryoku';
+  let _pCanvas         = null;
+  let _controlsInited  = false;
 
   function start(characterId) {
     _charId = characterId || 'ryoku';
 
+    const trainingScreen = Utils.qs('#screen-training');
     if (!_pCanvas) {
       _pCanvas = document.createElement('canvas');
       _pCanvas.id = 'tr-particle-canvas';
       _pCanvas.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:50;';
-      Utils.qs('#screen-training').appendChild(_pCanvas);
+    }
+    if (!trainingScreen.contains(_pCanvas)) {
+      trainingScreen.appendChild(_pCanvas);
     }
 
     if (_engine) _engine.stop();
@@ -33,7 +37,11 @@ const TrainingScreen = (() => {
     _engine.hud = hud;
     _engine.startTraining(_charId);
 
-    _initControls();
+    // Only bind button listeners once to avoid stacking
+    if (!_controlsInited) {
+      _initControls();
+      _controlsInited = true;
+    }
   }
 
   function _initControls() {
